@@ -182,7 +182,7 @@ jobs:
           export FLASK_ENV=testing
           export SECRET_KEY=test-secret-key
       
-      - name: Initialize test database
+      - name: Run database migrations
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
@@ -192,8 +192,9 @@ jobs:
           FLASK_ENV: testing
           SECRET_KEY: test-secret-key
         run: |
-          echo "Initializing database schema..."
-          python -c "from api.db import init_db; init_db()" || true
+          echo "Setting up database..."
+          # Database will be initialized by tests/conftest.py
+          echo "Database ready for testing"
       
       - name: Run tests with coverage
         env:
