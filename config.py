@@ -3,14 +3,14 @@ import logging
 
 
 def get_database_uri(test=False):
-    HOST = environ['POSTGRES_HOST_TEST'] if test else environ['POSTGRES_HOST']
-    PORT = getenv('POSTGRES_PORT_TEST') if test else getenv('POSTGRES_PORT')
+    HOST = getenv('POSTGRES_HOST_TEST', 'db') if test else getenv('POSTGRES_HOST', 'db')
+    PORT = getenv('POSTGRES_PORT_TEST', '5432') if test else getenv('POSTGRES_PORT', '5432')
     if PORT and PORT != 'None':
         HOST = HOST + ':' + PORT
     POSTGRES = {
-        'user': environ['POSTGRES_USER_TEST'] if test else environ['POSTGRES_USER'],
-        'pw': environ['POSTGRES_PASSWORD_TEST'] if test else environ['POSTGRES_PASSWORD'],
-        'db': environ['POSTGRES_DB_TEST'] if test else environ['POSTGRES_DB'],
+        'user': getenv('POSTGRES_USER_TEST', 'postgres') if test else getenv('POSTGRES_USER', 'postgres'),
+        'pw': getenv('POSTGRES_PASSWORD_TEST', 'docker') if test else getenv('POSTGRES_PASSWORD', 'docker'),
+        'db': getenv('POSTGRES_DB_TEST', 'pfaas_test') if test else getenv('POSTGRES_DB', 'pfaas_dev'),
         'host': HOST,
     }
     return 'postgresql://%(user)s:%(pw)s@%(host)s/%(db)s' % POSTGRES
@@ -41,7 +41,7 @@ class Config(object):
 class TestConfig(Config):
     LOG_DIR = path.join(
         BASE_PATH, '.logs', 'test',
-        environ['FLASK_ENV'] if environ['FLASK_ENV'] != 'test' else ''
+        getenv('FLASK_ENV', 'test') if getenv('FLASK_ENV', 'test') != 'test' else ''
     )
     LOG_LEVEL = getenv('LOG_LEVEL') or logging.INFO
     PROFILE = False
@@ -65,7 +65,7 @@ class StagingConfig(ProdConfig):
 
 
 def get_config(test=False):
-    FLASK_ENV = environ['FLASK_ENV']
+    FLASK_ENV = getenv('FLASK_ENV', 'production')
     if (test or FLASK_ENV == 'test'):
         return TestConfig
     if FLASK_ENV == 'development':

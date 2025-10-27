@@ -1,27 +1,51 @@
 version: "3.8"
 
+# Define custom network for internal container communication
+networks:
+  app-network:
+    driver: bridge
+
 services:
+  # PostgreSQL Database Service
+  db:
+    image: postgres:15-alpine
+    container_name: flask-api-postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-pfaas_dev}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-docker}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Persistent storage for database data
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Flask API Service (Backend)
   api:
     env_file: ${DOT_ENV_FILE:-.env-none}
     # Ensure specific environment variables are ALWAYS available.
     environment:
-      - APP_NAME=${APP_NAME:-"Python Flask Ariadne API Starter Test"}
+      - APP_NAME=${APP_NAME:-"Python Flask Ariadne API Starter"}
       - FLASK_APP=${FLASK_APP:-app.py}
       - FLASK_DEBUG_MODE=${FLASK_DEBUG_MODE:-false}
-      - FLASK_ENV=${FLASK_ENV:-development}
+      - FLASK_ENV=${FLASK_ENV:-production}
       - FLASK_RUN_PORT=${FLASK_RUN_PORT:-5000}
       - LOG_TYPE=${LOG_TYPE:-}
       - NO_AUTO_START=${NO_AUTO_START:-}
+      # Database connection using internal Docker network
       - POSTGRES_DB=${POSTGRES_DB:-pfaas_dev}
-      - POSTGRES_DB_TEST=${POSTGRES_DB:-pfaas_test}
-      - POSTGRES_HOST=${POSTGRES_HOST:-host.docker.internal}
-      - POSTGRES_HOST_TEST=${POSTGRES_HOST_TEST:-host.docker.internal}
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_PORT_TEST=${POSTGRES_PORT_TEST:-5432}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-docker}
-      - POSTGRES_PASSWORD_TEST=${POSTGRES_PASSWORD_TEST:-docker}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_USER_TEST=${POSTGRES_USER_TEST:-postgres}
       - PYTHONUNBUFFERED=1
       - PYTHON_VERSION=${PYTHON_VERSION:-3.10}
       - SECRET_KEY=${SECRET_KEY:-some_real_good_secret}
@@ -29,26 +53,51 @@ services:
       - SSL_ENABLED=${SSL_ENABLED:-}
     build:
       context: ./
-      dockerfile: Dockerfile-dev
+      dockerfile: Dockerfile
       args:
         pythonVersion: ${PYTHON_VERSION:-3.10}
-    container_name: python-flask-ariadne-api-starter
-    image: python-flask-ariadne-api-starter:dev
+    container_name: flask-api-app
+    image: flask-api-app:latest
     command:
       - "sh"
       - "-c"
-      - "if [ ${NO_AUTO_START:-} ]; then tail -f /dev/null; else python /app/run.py; fi"
+      - "python /app/run.py"
     ports:
-      - ${FLASK_RUN_PORT:-5000}:${FLASK_RUN_PORT:-5000}
-      - ${SNAKEVIZ_PORT:-8020}:${SNAKEVIZ_PORT:-8020}
-    volumes:
-      - .:/app:delegated
-      - ~/.gitconfig:/root/.gitconfig:delegated
-      - ~/.ssh:/root/.ssh:delegated
-      - python-flask-ariadne-api-starter-dev-root-vol:/root:delegated
+      - "${FLASK_RUN_PORT:-5000}:${FLASK_RUN_PORT:-5000}"
+      - "${SNAKEVIZ_PORT:-8020}:${SNAKEVIZ_PORT:-8020}"
+    networks:
+      - app-network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
     logging:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # React Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: flask-api-frontend
+    image: flask-api-frontend:latest
+    ports:
+      - "3000:80"
+    networks:
+      - app-network
+    depends_on:
+      - api
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000/api
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Persistent volumes for data storage
 volumes:
-  python-flask-ariadne-api-starter-dev-root-vol:
+  postgres-data:
+    driver: local

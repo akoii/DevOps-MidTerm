@@ -1,7 +1,7 @@
-from api import db_models
 import logging
 from datetime import datetime as dt
 from flask import Flask, request
+from flask_cors import CORS
 from config import get_config
 from .extensions import db, logs, migrate
 
@@ -10,6 +10,9 @@ def create_app(test=False):
     config = get_config(test=test)
     app = Flask(__name__)
     app.config.from_object(config)
+    
+    # Enable CORS for frontend to access API
+    CORS(app, resources={r"/api/*": {"origins": "*"}, r"/graphiql": {"origins": "*"}})
 
     register_extensions(app)
 
@@ -52,4 +55,8 @@ def register_extensions(app):
     db.init_app(app)
     logs.init_app(app)
     migrate.init_app(app, db)
+    
+    # Import models after db is initialized to avoid circular imports
+    from api import db_models
+    
     return None
